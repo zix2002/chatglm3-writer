@@ -11,4 +11,6 @@ AdvertiseGen/
 
 .DS_Store
 models/*
+!models/.gitkeep
 books/*
+!books/.gitkeep
