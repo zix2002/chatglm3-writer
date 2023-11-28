@@ -49,11 +49,13 @@ def auto_configure_device_map(num_gpus: int) -> Dict[str, int]:
 def load_model_on_gpus(checkpoint_path: Union[str, os.PathLike], num_gpus: int = 2,
                        device_map: Optional[Dict[str, int]] = None, **kwargs) -> Module:
     if num_gpus < 2 and device_map is None:
-        model = AutoModel.from_pretrained(checkpoint_path, trust_remote_code=True, **kwargs).half().cuda()
+        model = AutoModel.from_pretrained(
+            checkpoint_path, trust_remote_code=True, **kwargs).half().cuda()
     else:
         from accelerate import dispatch_model
 
-        model = AutoModel.from_pretrained(checkpoint_path, trust_remote_code=True, **kwargs).half()
+        model = AutoModel.from_pretrained(
+            checkpoint_path, trust_remote_code=True, **kwargs).half()
 
         if device_map is None:
             device_map = auto_configure_device_map(num_gpus)
@@ -112,7 +114,8 @@ def generate_stream_chatglm3(model: PreTrainedModel, tokenizer: PreTrainedTokeni
     messages = process_chatglm_messages(messages, functions=functions)
     query, role = messages[-1]["content"], messages[-1]["role"]
 
-    inputs = tokenizer.build_chat_input(query, history=messages[:-1], role=role)
+    inputs = tokenizer.build_chat_input(
+        query, history=messages[:-1], role=role)
     inputs = inputs.to(model.device)
     input_echo_len = len(inputs["input_ids"][0])
 
@@ -145,7 +148,8 @@ def generate_stream_chatglm3(model: PreTrainedModel, tokenizer: PreTrainedTokeni
 
         response = tokenizer.decode(output_ids)
         if response and response[-1] != "�":
-            response, stop_found = apply_stopping_strings(response, ["<|observation|>"])
+            response, stop_found = apply_stopping_strings(
+                response, ["<|observation|>"])
 
             yield {
                 "text": response,

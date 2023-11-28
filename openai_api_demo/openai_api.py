@@ -6,6 +6,8 @@
 # 在OpenAI的API中，max_tokens 等价于 HuggingFace 的 max_new_tokens 而不是 max_length，。
 # 例如，对于6b模型，设置max_tokens = 8192，则会报错，因为扣除历史记录和提示词后，模型不能输出那么多的tokens。
 
+from ast import Dict
+import json
 import os
 import time
 from contextlib import asynccontextmanager
@@ -21,8 +23,8 @@ from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 from transformers import AutoTokenizer, AutoModel
 
-import books
-
+import book_service
+from book_service import BookCard, ChapterCard
 from utils import process_response, generate_chatglm3, generate_stream_chatglm3
 
 MODEL_PATH = os.environ.get(
@@ -75,36 +77,18 @@ class ModelList(BaseModel):
     data: List[ModelCard] = []
 
 
-class CharacterCard(BaseModel):
-    name: str = ""
-    role: str = ""
-    description: str = ""
-
-
-class ChapterCard(BaseModel):
-    chapter: str = ""
-    title: str = ""
-    content: str = ""
-
-
-class BookCard(BaseModel):
-    title: str
-    cover: str = ""
-    author: str = ""
-    words: str = ""
-    bookType: str = ""
-    description: str = ""
-    characters: List[CharacterCard] = []
-    chapters: List[ChapterCard] = []
-
-
 class ChapterDetail(BaseModel):
-    object: str = "object"
+    object: str = "chapter"
     data: ChapterCard
 
 
+class BookDetail(BaseModel):
+    object: str = "book"
+    data: BookCard
+
+
 class BookList(BaseModel):
-    object: str = "list"
+    object: str = "books"
     data: List[BookCard] = []
 
 
@@ -176,40 +160,63 @@ async def list_models():
     return ModelList(data=[model_card])
 
 
-@app.get("/v1/books/{book_name}/chapters/{chapter}", response_model=ChapterDetail)
-async def get_chapter(book_name, chapter):
-    chapter_detail = books.get_chapter(book_name, chapter)
+@app.get("/v1/books", response_model=BookList)
+async def fetchBooks():
+    # 获取书籍列表
+    return BookList(data=book_service.get_books())
+
+
+@app.post("/v1/books", response_model=BookDetail)
+async def createBook(request: BookCard):
+    # 创建书籍
+    book_detail = book_service.create_book(json.loads(request.json()))
+    return BookDetail(data=book_detail)  # type: ignore
+
+
+@app.put("/v1/books/{book_index}", response_model=BookDetail)
+async def updateBook(book_index: int, request: BookCard):
+    # 更新书籍
+    book_detail = book_service.update_book(
+        book_index, json.loads(request.json()))
+
+    return BookDetail(data=book_detail)  # type: ignore
+
+
+@app.delete("/v1/books/{book_index}", response_model=BookList)
+async def deleteBook(book_index: int):
+    books = book_service.delete_book(book_index)
+    return BookList(data=books)
+
+
+@app.get("/v1/books/{book_index}/chapters/{chapter_index}", response_model=ChapterDetail)
+async def fetchChapter(book_index: int, chapter_index: int):
+    # 获取章节详情
+    chapter_detail = book_service.get_chapter(book_index, chapter_index)
+
     return ChapterDetail(data=chapter_detail)
 
 
-@app.get("/v1/books", response_model=BookList)
-async def list_books():
-    # 获取书籍列表
-    return BookList(data=books.get_books_list())
+@app.post("/v1/books/{book_index}/chapters", response_model=BookDetail)
+async def create_chapter(book_index: int, request: ChapterCard):
+    # 创建章节
+    book_detail = book_service.create_chapter(
+        book_index, json.loads(request.json()))
+    return BookDetail(data=book_detail)
 
 
-@app.post("/v1/books", response_model=BookCard)
-async def create_book():
-    # 创建书籍
-    pass
+@app.put("/v1/books/{book_index}/chapters/{chapter_index}", response_model=BookDetail)
+async def update_chapter(book_index: int, chapter_index: int, request: ChapterCard):
+    # 创建章节
+    book_detail = book_service.update_chapter(
+        book_index, chapter_index, json.loads(request.json()))
+    return BookDetail(data=book_detail)
 
 
-@app.post("/v1/books/{book_name}", response_model=BookCard)
-async def update_book():
-    # TODO 更新书籍
-    pass
-
-
-@app.delete("/v1/books", response_model=BookCard)
-async def delete_book():
-    # TODO 删除书籍
-    pass
-
-
-@app.post("/v1/books/{book_name}/chapters", response_model=BookCard)
-async def create_chapter():
-    # TODO 创建书籍章节
-    pass
+@app.delete("/v1/books/{book_index}/chapters/{chapter_index}", response_model=BookDetail)
+async def delete_chapter(book_index: int, chapter_index: int):
+    # 创建章节
+    book_detail = book_service.delete_chapter(book_index, chapter_index)
+    return BookDetail(data=book_detail)
 
 
 @app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
