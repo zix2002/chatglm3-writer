@@ -6,12 +6,11 @@
 # 在OpenAI的API中，max_tokens 等价于 HuggingFace 的 max_new_tokens 而不是 max_length，。
 # 例如，对于6b模型，设置max_tokens = 8192，则会报错，因为扣除历史记录和提示词后，模型不能输出那么多的tokens。
 
-from ast import Dict
-import json
 import os
 import time
 from contextlib import asynccontextmanager
-from typing import List, Literal, Optional, Union
+from turtle import st
+from typing import List, Literal, Optional, Union, Dict
 
 import torch
 import uvicorn
@@ -23,8 +22,13 @@ from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 from transformers import AutoTokenizer, AutoModel
 
-import book_service
-from book_service import BookCard, ChapterCard
+import writer as writer
+from writer import BookList, BookDetail, ChapterList, ChapterDetail, BookType, ChapterType
+
+import session
+from session import SessionType, MessageType, SessionList, MessageList, SessionDetail
+
+
 from utils import process_response, generate_chatglm3, generate_stream_chatglm3
 
 MODEL_PATH = os.environ.get(
@@ -58,7 +62,10 @@ async def generic_exception_handler(request, exc):
     logger.error(exc)
     return JSONResponse(
         status_code=500,
-        content={"message": str(exc)},
+        content={
+            "success": False,
+            "message": str(exc)
+        },
     )
 
 
@@ -77,21 +84,6 @@ class ModelList(BaseModel):
     data: List[ModelCard] = []
 
 
-class ChapterDetail(BaseModel):
-    object: str = "chapter"
-    data: ChapterCard
-
-
-class BookDetail(BaseModel):
-    object: str = "book"
-    data: BookCard
-
-
-class BookList(BaseModel):
-    object: str = "books"
-    data: List[BookCard] = []
-
-
 class FunctionCallResponse(BaseModel):
     name: Optional[str] = None
     arguments: Optional[str] = None
@@ -99,7 +91,7 @@ class FunctionCallResponse(BaseModel):
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant", "system", "function"]
-    content: str = None
+    content: str = ''
     name: Optional[str] = None
     function_call: Optional[FunctionCallResponse] = None
 
@@ -120,11 +112,6 @@ class ChatCompletionRequest(BaseModel):
     functions: Optional[Union[dict, List[dict]]] = None
     # Additional parameters
     repetition_penalty: Optional[float] = 1.1
-
-
-class BookChapterRequest(BaseModel):
-    book: str
-    chapter: str
 
 
 class ChatCompletionResponseChoice(BaseModel):
@@ -160,63 +147,117 @@ async def list_models():
     return ModelList(data=[model_card])
 
 
+######################
+# 书籍相关接口
+######################
+# 获取书籍列表
 @app.get("/v1/books", response_model=BookList)
 async def fetchBooks():
-    # 获取书籍列表
-    return BookList(data=book_service.get_books())
-
-
-@app.post("/v1/books", response_model=BookDetail)
-async def createBook(request: BookCard):
-    # 创建书籍
-    book_detail = book_service.create_book(json.loads(request.json()))
-    return BookDetail(data=book_detail)  # type: ignore
-
-
-@app.put("/v1/books/{book_index}", response_model=BookDetail)
-async def updateBook(book_index: int, request: BookCard):
-    # 更新书籍
-    book_detail = book_service.update_book(
-        book_index, json.loads(request.json()))
-
-    return BookDetail(data=book_detail)  # type: ignore
-
-
-@app.delete("/v1/books/{book_index}", response_model=BookList)
-async def deleteBook(book_index: int):
-    books = book_service.delete_book(book_index)
+    books = writer.get_books()
     return BookList(data=books)
 
 
-@app.get("/v1/books/{book_index}/chapters/{chapter_index}", response_model=ChapterDetail)
-async def fetchChapter(book_index: int, chapter_index: int):
-    # 获取章节详情
-    chapter_detail = book_service.get_chapter(book_index, chapter_index)
+# 创建书籍
+@app.post("/v1/books", response_model=BookList)
+async def createBook():
+
+    books = writer.create_book()
+    return BookList(data=books)
+
+
+# 更新书籍
+@app.put("/v1/books/{book_id}", response_model=BookDetail)
+async def updateBook(book_id: str, request: BookType):
+    book_detail = writer.update_book(book_id, request)
+
+    return BookDetail(data=book_detail)  # type: ignore
+
+
+# 删除书籍
+@app.delete("/v1/books/{book_id}", response_model=BookList)
+async def deleteBook(book_id: str):
+    books = writer.delete_book(book_id)
+    return BookList(data=books)
+
+
+######################
+# 章节相关接口
+######################
+
+# 获取章节详情
+@app.get("/v1/books/{book_id}/chapters/{chapter_id}", response_model=ChapterDetail)
+async def fetchChapter(book_id: str, chapter_id: str):
+
+    chapter_detail = writer.get_chapter(book_id, chapter_id)
 
     return ChapterDetail(data=chapter_detail)
 
 
-@app.post("/v1/books/{book_index}/chapters", response_model=BookDetail)
-async def create_chapter(book_index: int, request: ChapterCard):
-    # 创建章节
-    book_detail = book_service.create_chapter(
-        book_index, json.loads(request.json()))
-    return BookDetail(data=book_detail)
+# 创建章节
+@app.post("/v1/books/{book_id}/chapters", response_model=BookList)
+async def create_chapter(book_id: str, request: ChapterType):
+    book_list = writer.create_chapter(book_id, request)
+    return BookList(data=book_list)
 
 
-@app.put("/v1/books/{book_index}/chapters/{chapter_index}", response_model=BookDetail)
-async def update_chapter(book_index: int, chapter_index: int, request: ChapterCard):
-    # 创建章节
-    book_detail = book_service.update_chapter(
-        book_index, chapter_index, json.loads(request.json()))
-    return BookDetail(data=book_detail)
+# 更新章节
+@app.put("/v1/books/{book_id}/chapters/{chapter_id}", response_model=BookList)
+async def update_chapter(book_id: str, chapter_id: str, request: ChapterType):
+    book_list = writer.update_chapter(book_id, chapter_id, request)
+    return BookList(data=book_list)
 
 
-@app.delete("/v1/books/{book_index}/chapters/{chapter_index}", response_model=BookDetail)
-async def delete_chapter(book_index: int, chapter_index: int):
-    # 创建章节
-    book_detail = book_service.delete_chapter(book_index, chapter_index)
-    return BookDetail(data=book_detail)
+# 删除章节
+@app.delete("/v1/books/{book_id}/chapters/{chapter_id}", response_model=BookList)
+async def delete_chapter(book_id: str, chapter_id: str):
+    book_list = writer.delete_chapter(book_id, chapter_id)
+    return BookList(data=book_list)
+
+
+##########################
+# 聊天相关的API
+##########################
+
+# 获取会话列表
+@app.get("/v1/sessions", response_model=SessionList)
+async def getSessions():
+    session_list = session.get_sessions()
+    return SessionList(data=session_list)
+
+
+# 新建会话
+@app.post("/v1/sessions", response_model=SessionList)
+async def createNewSession():
+    session_list = session.create_new_session()
+    return SessionList(data=session_list)
+
+
+# 删除会话
+@app.delete("/v1/sessions/{session_id}", response_model=SessionList)
+async def deleteSessionById(session_id: str):
+    sessions = session.delete_session(session_id)
+    return SessionList(data=sessions)
+
+
+# 获取会话消息列表
+@app.get("/v1/sessions/{session_id}/messages", response_model=MessageList)
+async def getMessagesSessionById(session_id: str):
+    message_list = session.get_messages(session_id)
+    return MessageList(data=message_list)
+
+
+# 更新会话消息
+@app.post("/v1/sessions/{session_id}/messages", response_model=MessageList)
+async def getSessionById(session_id: str, request: MessageType):
+    messages = session.update_message(session_id, request)
+    return MessageList(data=messages)
+
+
+# 删除会话消息
+@app.delete("/v1/sessions/{session_id}/messages/{message_id}", response_model=MessageList)
+async def deleteMessage(session_id: str, message_id: str):
+    messages = session.delete_message(session_id, message_id)
+    return MessageList(data=messages)
 
 
 @app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
@@ -339,12 +380,12 @@ async def predict(model_id: str, params: dict):
 
 if __name__ == "__main__":
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        TOKENIZER_PATH, trust_remote_code=True)
-    if 'cuda' in DEVICE:  # AMD, NVIDIA GPU can use Half Precision
-        model = AutoModel.from_pretrained(
-            MODEL_PATH, trust_remote_code=True).to(DEVICE).eval()
-    else:  # CPU, Intel GPU and other GPU can use Float16 Precision Only
-        model = AutoModel.from_pretrained(
-            MODEL_PATH, trust_remote_code=True).half().to(DEVICE).eval()
+    # tokenizer = AutoTokenizer.from_pretrained(
+    #     TOKENIZER_PATH, trust_remote_code=True)
+    # if 'cuda' in DEVICE:  # AMD, NVIDIA GPU can use Half Precision
+    #     model = AutoModel.from_pretrained(
+    #         MODEL_PATH, trust_remote_code=True).to(DEVICE).eval()
+    # else:  # CPU, Intel GPU and other GPU can use Float16 Precision Only
+    #     model = AutoModel.from_pretrained(
+    #         MODEL_PATH, trust_remote_code=True).half().to(DEVICE).eval()
     uvicorn.run(app, host='0.0.0.0', port=8600, workers=1)

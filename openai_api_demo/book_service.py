@@ -1,10 +1,8 @@
 from __future__ import unicode_literals
-from calendar import c
 import os
 import json
 from typing import List, Optional, Dict
 from pydantic import BaseModel
-from regex import B
 
 
 class CharacterCard(BaseModel):
@@ -15,6 +13,7 @@ class CharacterCard(BaseModel):
 
 class ChapterCard(BaseModel):
     title: str = ""
+    description: str = ""
     content: str = ""
 
 
@@ -25,6 +24,7 @@ class BookCard(BaseModel):
     words: str = ""
     bookType: str = ""
     description: str = ""
+    story: str = ""
     characters: List[CharacterCard] = []
     chapters: List[ChapterCard] = []
 
@@ -122,8 +122,6 @@ def get_book_by_index(index: int):
 
 
 def create_book(config):
-    print(config)
-
     # 创建书籍
     book_config = {**DEFAULT_BOOK_CONFIG, **config}
     book_name = book_config["title"]
@@ -142,7 +140,7 @@ def create_book(config):
     create_book_dir(book_name)
 
     # 返回刚创建的书籍
-    return book_config
+    return books
 
 
 def update_book(index: int, config):
@@ -268,9 +266,10 @@ def update_chapter(book_index: int, chapter_index: int, chapter):
         # 修改章节文件名
         old_chapter_path = os.path.join(
             BOOKS_PATH, book_name, old_chapter_title + ".txt")
-        new_chapter_path = os.path.join(
-            BOOKS_PATH, book_name, chapter_title + ".txt")
-        os.rename(old_chapter_path, new_chapter_path)
+        if os.path.exists(old_chapter_path):
+            new_chapter_path = os.path.join(
+                BOOKS_PATH, book_name, chapter_title + ".txt")
+            os.rename(old_chapter_path, new_chapter_path)
 
     save_chapter_content(book_name, chapter_title, chapter_content)
 
@@ -294,6 +293,7 @@ def delete_chapter(book_index: int, chapter_index: int):
 
     # 删除章节文件
     chapter_path = os.path.join(BOOKS_PATH, book_name, chapter_title + ".txt")
-    os.remove(chapter_path)
+    if os.path.exists(chapter_path):
+        os.remove(chapter_path)
 
     return book

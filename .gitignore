@@ -14,3 +14,5 @@ models/*
 !models/.gitkeep
 books/*
 !books/.gitkeep
+sessions/*
+!sessions/.gitkeep
