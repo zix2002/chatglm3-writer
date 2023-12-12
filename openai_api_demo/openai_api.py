@@ -23,7 +23,7 @@ from sse_starlette.sse import EventSourceResponse
 from transformers import AutoTokenizer, AutoModel
 
 import writer as writer
-from writer import BookList, BookDetail, ChapterList, ChapterDetail, BookType, ChapterType
+from writer import BookList, BookDetail, ChapterList, ChapterDetail, BookType, ChapterType, NovelType, NovelTypeList
 
 import session
 from session import SessionType, MessageType, SessionList, MessageList, SessionDetail
@@ -214,11 +214,45 @@ async def delete_chapter(book_id: str, chapter_id: str):
     return BookList(data=book_list)
 
 
+######################
+# 小说类型相关接口
+######################
+
+
+# 获取小说类型列表
+@app.get("/v1/books/novel-types", response_model=NovelTypeList)
+async def fetchNovelTypes():
+    novel_types = writer.get_novel_types()
+    return NovelTypeList(data=novel_types)
+
+
+# 创建小说类型
+@app.post("/v1/books/novel-types", response_model=NovelTypeList)
+async def createNovelType(request: NovelType):
+    novel_types = writer.create_novel_type(request)
+    return NovelTypeList(data=novel_types)
+
+
+#  更新小说类型
+@app.put("/v1/books/novel-types/{novel_type_label}", response_model=NovelTypeList)
+async def updateNovelType(novel_type_label: str, request: NovelType):
+    novel_types = writer.update_novel_type(novel_type_label, request)
+    return NovelTypeList(data=novel_types)
+
+
+# 删除小说类型
+@app.delete("/v1/books/novel-types/{novel_type_label}", response_model=NovelTypeList)
+async def deleteNovelType(novel_type_label: str):
+    novel_types = writer.delete_novel_type(novel_type_label)
+    return NovelTypeList(data=novel_types)
+
 ##########################
 # 聊天相关的API
 ##########################
 
 # 获取会话列表
+
+
 @app.get("/v1/sessions", response_model=SessionList)
 async def getSessions():
     session_list = session.get_sessions()

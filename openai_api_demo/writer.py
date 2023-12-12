@@ -3,6 +3,7 @@ import uuid
 import os
 import json
 import datetime
+from click import prompt
 from pydantic import BaseModel
 from typing import List
 
@@ -24,7 +25,7 @@ class ChapterType(BaseModel):
 
 class BookType(BaseModel):
     id: str = ""
-    bookType: str = "都市悬疑"
+    novelType: str = "都市悬疑"
     title: str = ""
     cover: str = ""
     description: str = ""
@@ -62,6 +63,24 @@ class ChapterDetail(BaseModel):
     data: ChapterType
 
 
+class PromptType(BaseModel):
+    label: str
+    content: str = ''
+    format: str = ''
+
+
+class NovelType(BaseModel):
+    label: str
+    prompt: List[PromptType] = []
+
+
+class NovelTypeList(BaseModel):
+    success: bool = True
+    message: str = "success"
+    showType: str = "silent"
+    data: List[NovelType] = []
+
+
 BOOK_PATH = './books'
 
 
@@ -75,7 +94,6 @@ def create_books_dir() -> None:
 
 
 def save_books(books: List[BookType]) -> bool:
-    print(books)
     # 保存到 config.json
     config_file_path = os.path.join(BOOK_PATH, "config.json")
     save_data = []
@@ -225,7 +243,69 @@ def delete_chapter(book_id: str, chapter_id: str) -> List[BookType]:
         (item for item in book.chapters if item.id == chapter_id))
 
     book.chapters.remove(chapter)
-
     save_books(books)
 
     return books
+
+
+# 保存小说类型
+def save_novel_type(data: List[NovelType]) -> bool:
+    novel_type_file = os.path.join(BOOK_PATH, "novel_type.json")
+
+    save_data = []
+    for item in data:
+        save_data.append(item.dict())
+
+    with open(novel_type_file, "w") as f:
+        f.write(json.dumps(save_data, ensure_ascii=False, indent=4))
+
+    return True
+
+
+# 获取小说类型
+def get_novel_types() -> List[NovelType]:
+    novel_type_file = os.path.join(BOOK_PATH, "novel_type.json")
+
+    if not os.path.exists(novel_type_file):
+        return []
+
+    with open(novel_type_file, "r") as f:
+        data = json.loads(f.read())
+        return [NovelType(**item) for item in data]
+
+
+# 创建小说类型
+def create_novel_type(novel_type: NovelType) -> List[NovelType]:
+    data = get_novel_types()
+
+    data.append(novel_type)
+    save_novel_type(data)
+
+    return data
+
+
+# 更新小说类型
+def update_novel_type(id: str, novel_type: NovelType) -> List[NovelType]:
+    data = get_novel_types()
+    old_novel_type = next((item for item in data if item.label == id))
+    if not old_novel_type:
+        raise Exception('小说类型不存在')
+
+    old_novel_type.label = novel_type.label or old_novel_type.label
+    old_novel_type.prompt = novel_type.prompt or old_novel_type.prompt
+    save_novel_type(data)
+
+    return data
+
+
+# 删除小说类型
+def delete_novel_type(label: str) -> List[NovelType]:
+    data = get_novel_types()
+    novel_type = next((item for item in data if item.label == label))
+    if not novel_type:
+        raise Exception('类型不存在')
+
+    data.remove(novel_type)
+    save_novel_type(data)
+
+    return data
