@@ -250,9 +250,8 @@ async def deleteNovelType(novel_type_label: str):
 # 聊天相关的API
 ##########################
 
+
 # 获取会话列表
-
-
 @app.get("/v1/sessions", response_model=SessionList)
 async def getSessions():
     session_list = session.get_sessions()
