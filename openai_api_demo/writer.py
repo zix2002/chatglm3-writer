@@ -10,17 +10,25 @@ from typing import List
 
 class CharacterType(BaseModel):
     name: str = ""
-    role: str = ""
     description: str = ""
+
+
+class ParagraphType(BaseModel):
+    id: str = ""
+    previous: str = ""
+    style: str = ""
+    fragment: str = ""
+    requirement: str = ""
+    content: str = ""
 
 
 class ChapterType(BaseModel):
     id: str = ""
     title: str = ""
-    summary: str = ""
     description: str = ""
-    characters: List[CharacterType] = []
+    summary: str = ""
     content: str = ""
+    paragraphs: List[ParagraphType] = []
 
 
 class BookType(BaseModel):
@@ -189,8 +197,9 @@ def create_chapter(book_id: str, chapter: ChapterType) -> List[BookType]:
     newChapter = ChapterType(
         id=str(uuid.uuid4()),
         title=chapter.title or "新章节名",
-        description=chapter.description or "",
         summary=chapter.summary or "",
+        content=chapter.content or "",
+        paragraphs=chapter.paragraphs or [],
     )
 
     book.chapters.append(newChapter)
@@ -222,10 +231,10 @@ def update_chapter(book_id: str, chapter_id: str, chapter: ChapterType) -> List[
         (item for item in book.chapters if item.id == chapter_id))
 
     oldChapter.title = chapter.title or oldChapter.title
-    oldChapter.summary = chapter.summary or oldChapter.summary
-    oldChapter.description = chapter.description or oldChapter.description
     oldChapter.content = chapter.content or oldChapter.content
-    oldChapter.characters = chapter.characters or oldChapter.characters
+    oldChapter.description = chapter.description or oldChapter.description
+    oldChapter.summary = chapter.summary or oldChapter.summary
+    oldChapter.paragraphs = chapter.paragraphs or []
 
     save_books(books)
 
